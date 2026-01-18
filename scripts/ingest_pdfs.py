@@ -1,4 +1,6 @@
+import argparse
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List
 
@@ -32,7 +34,28 @@ def load_documents(pdf_dir: Path) -> List[Dict]:
     return documents
 
 
+def chunk_batches(documents: List[Dict], batch_size: int) -> List[List[Dict]]:
+    return [documents[start : start + batch_size] for start in range(0, len(documents), batch_size)]
+
+
+def embed_batch(config: AppConfig, batch: List[Dict]) -> List[Dict]:
+    openai_client = create_openai_client(config)
+    embeddings = embed_texts(
+        openai_client,
+        config.openai_embedding_deployment,
+        [doc["content"] for doc in batch],
+    )
+    for doc, embedding in zip(batch, embeddings):
+        doc["content_vector"] = embedding
+    return batch
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Ingest PDFs into Azure AI Search.")
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--workers", type=int, default=4)
+    args = parser.parse_args()
+
     config = AppConfig.from_env()
     pdf_dir = Path("data/pdfs")
     if not pdf_dir.exists():
@@ -42,21 +65,14 @@ def main() -> None:
     if not documents:
         raise ValueError("No PDF documents found in data/pdfs")
 
-    openai_client = create_openai_client(config)
     search_client = create_search_client(config, use_admin=True)
 
-    batch_size = 16
-    for start in range(0, len(documents), batch_size):
-        batch = documents[start : start + batch_size]
-        embeddings = embed_texts(
-            openai_client,
-            config.openai_embedding_deployment,
-            [doc["content"] for doc in batch],
-        )
-        for doc, embedding in zip(batch, embeddings):
-            doc["content_vector"] = embedding
-        search_client.upload_documents(documents=batch)
-        print(f"Uploaded {start + len(batch)} / {len(documents)}")
+    batches = chunk_batches(documents, args.batch_size)
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        for index, batch in enumerate(executor.map(lambda b: embed_batch(config, b), batches), start=1):
+            search_client.upload_documents(documents=batch)
+            uploaded = min(index * args.batch_size, len(documents))
+            print(f"Uploaded {uploaded} / {len(documents)}")
 
     print("Ingestion complete.")
 

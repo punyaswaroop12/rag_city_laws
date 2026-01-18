@@ -55,9 +55,29 @@ python -m scripts.create_search_index
 python -m scripts.ingest_pdfs
 ```
 
+For faster ingestion, increase batch size and workers (subject to your Azure OpenAI rate limits):
+```bash
+python -m scripts.ingest_pdfs --batch-size 128 --workers 8
+```
+
 ### 7) Run the Streamlit app
 ```bash
 streamlit run streamlit_app.py
+```
+
+## Troubleshooting
+### `ModuleNotFoundError: No module named 'azure'`
+Install dependencies inside your virtual environment:
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### `ModuleNotFoundError: No module named 'rag_app'`
+Make sure you run the commands from the repo root using module execution:
+```bash
+python -m scripts.create_search_index
+python -m scripts.ingest_pdfs
 ```
 
 ## Production notes
