@@ -45,13 +45,14 @@ data/pdfs
 ```
 
 ### 5) Create the Azure AI Search index
+Run from the repo root so imports resolve:
 ```bash
-python scripts/create_search_index.py
+python -m scripts.create_search_index
 ```
 
 ### 6) Ingest the PDFs (chunk, embed, upload)
 ```bash
-python scripts/ingest_pdfs.py
+python -m scripts.ingest_pdfs
 ```
 
 ### 7) Run the Streamlit app
